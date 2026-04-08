@@ -1,0 +1,8 @@
+{
+  "name": "krithoathon-jury-console",
+  "private": true,
+  "scripts": {
+    "dev:netlify": "npm install --prefix client --no-audit --no-fund && node client/node_modules/vite/bin/vite.js client --host 0.0.0.0 --port 5200 --strictPort",
+    "build:netlify": "npm install --prefix client --no-audit --no-fund && node client/node_modules/vite/bin/vite.js build client"
+  }
+}
