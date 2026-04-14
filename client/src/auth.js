@@ -1,5 +1,12 @@
 import { supabase } from "./supabaseClient";
 
+const allowedEmailSet = new Set(
+  (import.meta.env.VITE_ALLOWED_EMAILS || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean)
+);
+
 export const signInWithGoogle = async () => {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: "google",
@@ -39,6 +46,10 @@ export const validateUserAccess = async (email) => {
   }
 
   const normalizedEmail = email.toLowerCase();
+  if (allowedEmailSet.has(normalizedEmail)) {
+    return true;
+  }
+
   const { data, error } = await supabase
     .from("allowed_users")
     .select("email")
