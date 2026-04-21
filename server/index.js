@@ -22,7 +22,7 @@ app.use(cors());
 app.use(express.json());
 
 const allowedEmailSet = new Set(
-  (ALLOWED_EMAILS || "katkarvinayak2006@gmail.com,vinayak.katkar1233@gmail.com")
+  (ALLOWED_EMAILS || "")
     .split(",")
     .map((email) => email.trim().toLowerCase())
     .filter(Boolean)
@@ -41,6 +41,15 @@ const CRITERIA_FIELDS = [
   "testing_robustness"
 ];
 
+// === 1. NEW HELPER FUNCTION TO GET THE ROUND-SPECIFIC TABLE NAME ===
+const getTableNameForRound = (roundNumber) => {
+  if (roundNumber === 1) {
+    return "scores_round1";
+  } else if (roundNumber === 2) {
+    return "scores_round2";
+  }
+  return null; // Handle unexpected round numbers
+};
 
 const isEmailAllowed = async (email) => {
   const normalized = String(email || "").trim().toLowerCase();
@@ -110,6 +119,7 @@ app.get("/api/teams", requireJuryAccess, async (req, res) => {
   return res.json({ teams: data || [] });
 });
 
+// === 2. UPDATED ENDPOINT TO INSERT INTO THE CORRECT ROUND-SPECIFIC TABLE ===
 app.post("/api/scores", requireJuryAccess, async (req, res) => {
   const { teamId, roundNumber, scores, review } = req.body;
 
@@ -119,11 +129,16 @@ app.post("/api/scores", requireJuryAccess, async (req, res) => {
     });
   }
 
+  const tableName = getTableNameForRound(roundNumber);
+  if (!tableName) {
+    return res.status(400).json({ error: `Invalid round number: ${roundNumber}.` });
+  }
+
+  // Check if a score already exists for this team in this SPECIFIC round table
   const { data: existing, error: existingError } = await supabase
-    .from("scores")
+    .from(tableName)
     .select("team_id")
     .eq("team_id", teamId)
-    .eq("round_number", roundNumber)
     .maybeSingle();
 
   if (existingError) {
@@ -131,15 +146,16 @@ app.post("/api/scores", requireJuryAccess, async (req, res) => {
   }
 
   if (existing) {
-    return res.status(409).json({ error: "Score exists. Admin key required to edit." });
+    return res.status(409).json({ error: `Score exists for Round ${roundNumber}. Admin key required to edit.` });
   }
 
+  // Enforce sequential round rule: if submitting Round 2, ensure Round 1 is complete in scores_round1
   if (roundNumber > 1) {
+    const previousRoundTableName = getTableNameForRound(roundNumber - 1);
     const { data: previousRound, error: previousRoundError } = await supabase
-      .from("scores")
+      .from(previousRoundTableName)
       .select("team_id")
       .eq("team_id", teamId)
-      .eq("round_number", roundNumber - 1)
       .maybeSingle();
 
     if (previousRoundError) {
@@ -153,9 +169,10 @@ app.post("/api/scores", requireJuryAccess, async (req, res) => {
     }
   }
 
+  // Prepare the payload, mapping roundNumber, email, review, and criteria
   const payload = {
     team_id: teamId,
-    round_number: roundNumber,
+    // Note: round_number is NOT in the round-specific table payload. The table IS the round.
     created_by_key: req.user.email,
     review: String(review || "").trim()
   };
@@ -167,7 +184,8 @@ app.post("/api/scores", requireJuryAccess, async (req, res) => {
     payload[field] = value;
   }
 
-  const { error: insertError } = await supabase.from("scores").insert(payload);
+  // Insert the score into the correct round-specific table
+  const { error: insertError } = await supabase.from(tableName).insert(payload);
 
   if (insertError) {
     return res.status(500).json({ error: insertError.message });
@@ -176,6 +194,7 @@ app.post("/api/scores", requireJuryAccess, async (req, res) => {
   return res.json({ ok: true });
 });
 
+// === 3. UPDATED ENDPOINT TO CHECK SUBMISSION STATUS IN THE CORRECT TABLE ===
 app.get("/api/scores/teams", requireJuryAccess, async (req, res) => {
   const roundNumber = Number.parseInt(req.query.roundNumber || "1", 10);
 
@@ -183,17 +202,65 @@ app.get("/api/scores/teams", requireJuryAccess, async (req, res) => {
     return res.status(400).json({ error: "Valid roundNumber is required." });
   }
 
+  const tableName = getTableNameForRound(roundNumber);
+  if (!tableName) {
+    return res.status(400).json({ error: `Invalid round number: ${roundNumber}.` });
+  }
+
+  // Fetch submitted team IDs from the round-specific table
   const { data, error } = await supabase
-    .from("scores")
-    .select("team_id")
-    .eq("round_number", roundNumber);
+    .from(tableName)
+    .select("team_id");
 
   if (error) {
     return res.status(500).json({ error: error.message });
   }
 
+  // Map the rows to just the IDs
   return res.json({ teamIds: (data || []).map((row) => row.team_id) });
 });
+
+app.get("/api/scores/:teamId", requireJuryAccess, async (req, res) => {
+  const { teamId } = req.params;
+
+  try {
+    // Fetch from both tables in parallel
+    const [r1, r2] = await Promise.all([
+      supabase.from("scores_round1").select("*").eq("team_id", teamId).maybeSingle(),
+      supabase.from("scores_round2").select("*").eq("team_id", teamId).maybeSingle()
+    ]);
+
+    const result = {};
+
+    if (r1.data) {
+      result[1] = {
+        review: r1.data.review,
+        // Map criteria fields into a nested scores object
+        scores: CRITERIA_FIELDS.reduce((acc, field) => {
+          acc[field] = r1.data[field];
+          return acc;
+        }, {})
+      };
+    }
+
+    if (r2.data) {
+      result[2] = {
+        review: r2.data.review,
+        scores: CRITERIA_FIELDS.reduce((acc, field) => {
+          acc[field] = r2.data[field];
+          return acc;
+        }, {})
+      };
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+// The GET /api/leaderboard endpoint remains unchanged. It works perfectly
+// because it relies on the 'leaderboard' VIEW, which you correctly updated 
+// in your SQL to COALESCE the sums from scores_round1 and scores_round2.
 
 app.get("/api/leaderboard", requireJuryAccess, async (_req, res) => {
   const [{ data: teams, error: teamsError }, { data: leaderboard, error: lbError }] =

@@ -37,7 +37,35 @@ export const getSession = async () => {
 
 export const getAccessToken = async () => {
   const session = await getSession();
-  return session?.access_token || "";
+  return session?.access_token || null;
+};
+
+export const fetchJson = async (url, options = {}) => {
+  // It relies on getAccessToken from the same file
+  const token = await getAccessToken(); 
+  
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  // If a token is available, attach the Authorization header
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const response = await fetch(url, {
+    ...options,
+    headers
+  });
+  
+  const data = await response.json().catch(() => ({}));
+  
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
+  
+  return data;
 };
 
 export const validateUserAccess = async (email) => {

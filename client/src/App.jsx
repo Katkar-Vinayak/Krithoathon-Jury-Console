@@ -1,3 +1,5 @@
+// src/App.jsx
+
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "./supabaseClient";
 import {
@@ -5,105 +7,218 @@ import {
   getSession,
   signInWithGoogle,
   signOutUser,
-  validateUserAccess
+  validateUserAccess,
+  fetchJson
 } from "./auth";
+import TeamDetail from "./TeamDetail"; 
+import googleButtonImage from "./assets/image.png";
 
-// Added basic styling and updated toast/disabled state styling.
 const styles = `
-.page { font-family: sans-serif; padding: 20px; max-width: 1200px; margin: 0 auto; color: #333; }
-.header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid #eee; margin-bottom: 20px; }
-.header h1 { margin: 0; font-size: 1.5rem; }
-.actions { display: flex; gap: 10px; align-items: center; }
-.user-email { font-size: 0.9rem; color: #666; }
-.actions button { padding: 8px 15px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer; }
+.page { font-family: sans-serif; min-height: 100vh; background-color: #f4f7f6; color: #333; }
+.page-auth {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 25% 18%, rgba(139, 19, 19, 0.6), transparent 45%),
+    radial-gradient(circle at 74% 30%, rgba(93, 18, 9, 0.55), transparent 42%),
+    linear-gradient(160deg, #5a0707 0%, #2a0707 48%, #120a14 100%);
+  padding: 28px;
+}
+.auth-card {
+  width: min(760px, 94%);
+  background: #f3f3f3;
+  border-radius: 34px;
+  padding: 44px 44px;
+  text-align: center;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
+}
+.auth-title {
+  margin: 0 0 20px;
+  font-size: clamp(1.8rem, 3.2vw, 3rem);
+  font-weight: 800;
+  letter-spacing: 0.3px;
+  color: #181a1f;
+}
+.auth-subtitle {
+  margin: 0 0 22px;
+  font-size: clamp(1rem, 1.5vw, 1.6rem);
+  color: #1d1f24;
+}
+.google-login-button {
+  width: min(560px, 100%);
+  border: none;
+  background: transparent;
+  border-radius: 20px;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 auto;
+}
+.google-login-button img {
+  width: 100%;
+  display: block;
+  border-radius: 20px;
+}
+.google-login-button:hover {
+  transform: translateY(-1px);
+}
+.auth-error {
+  margin-top: 14px;
+  display: inline-block;
+  background: #f44336;
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.back-home {
+  margin-top: 24px;
+  font-size: clamp(1rem, 1.2vw, 1.2rem);
+  text-decoration: none;
+  color: #fff;
+  font-weight: 700;
+  padding: 11px 30px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px rgba(255, 120, 54, 0.6), 0 0 28px rgba(255, 94, 40, 0.45);
+  background: rgba(24, 9, 17, 0.6);
+}
+.back-home:hover {
+  background: rgba(38, 17, 29, 0.82);
+}
+.header { display: flex; justify-content: space-between; align-items: center; padding: 20px 40px; border-bottom: 1px solid #e0e0e0; background: #2c1a12; }
+.header h1 { margin: 0; font-size: 1.5rem; color: #fff; font-weight: bold; }
+.actions { display: flex; gap: 15px; align-items: center; }
+.user-email { font-size: 0.9rem; color: #ccc; }
+.actions button { padding: 8px 15px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; color: #333; font-weight: 500; transition: all 0.2s; }
+.actions button:hover { background: #eee; }
 .actions button.logout { background: #f44336; color: white; border: none; }
-.panel { border: 1px solid #eee; border-radius: 8px; padding: 20px; background: #fafafa; }
-.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-.panel-header h2 { margin: 0; }
-.panel-tools input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
-.team-list { display: flex; flex-direction: column; gap: 15px; }
-.domain-section { margin-bottom: 20px; }
-.domain-title { font-weight: bold; font-size: 1.1rem; color: #555; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; border-bottom: 2px solid #eee; padding-bottom: 5px;}
-.team-card { border: 1px solid #eee; border-radius: 6px; padding: 15px; background: white; display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: start;}
-.team-info { display: flex; flex-direction: column; gap: 5px; }
-.team-name { margin: 0; font-size: 1.2rem; display: flex; align-items: center; gap: 10px; }
-.team-round-status { display: flex; gap: 5px; }
-.team-round-pill { font-size: 0.7rem; padding: 2px 6px; border-radius: 10px; background: #eee; color: #666; font-weight: normal;}
+.actions button.logout:hover { background: #d32f2f; }
+.main-content { padding: 40px; }
+.panel { border: 1px solid #e0e0e0; border-radius: 8px; padding: 30px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 1px solid #f0f0f0; padding-bottom: 15px; }
+.panel-header h2 { margin: 0; font-size: 1.3rem; font-weight: 600; color: #444; }
+.panel-tools input { padding: 10px 15px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; width: 250px; }
+.team-list { display: flex; flex-direction: column; gap: 20px; }
+.domain-section { margin-bottom: 30px; }
+.domain-title { font-weight: 700; font-size: 1.1rem; color: #2c1a12; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; border-bottom: 2px solid #2c1a12; padding-bottom: 8px; }
+.team-card { border: 1px solid #eee; border-radius: 6px; padding: 20px; background: #fff; display: grid; grid-template-columns: 1fr auto; gap: 15px; align-items: start; transition: border-color 0.2s, box-shadow 0.2s; }
+.team-card:hover { border-color: #ddd; box-shadow: 0 4px 8px rgba(0,0,0,0.03); }
+.team-info { display: flex; flex-direction: column; gap: 8px; }
+.team-name { margin: 0; font-size: 1.3rem; font-weight: 600; display: flex; align-items: center; gap: 12px; }
+.team-round-status { display: flex; gap: 8px; }
+.team-round-pill { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; background: #eee; color: #666; font-weight: 500; text-transform: uppercase; }
 .team-round-pill-submitted { background: #4caf50; color: white; }
 .team-actions { text-align: right; }
-.link-button { background: none; border: none; color: #2196f3; cursor: pointer; text-decoration: underline; padding: 0; font-size: 0.9rem;}
-.criteria-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 15px; border-top: 1px solid #eee; padding-top: 15px; margin-top: 5px;}
-.criteria-rounds { grid-column: 1 / -1; display: flex; items-center: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;}
-.criteria-rounds-label { font-size: 0.9rem; color: #666; font-weight: bold;}
-.round-toggle { display: flex; gap: 5px; }
-.round-toggle-button { padding: 5px 10px; border: 1px solid #ccc; background: white; border-radius: 4px; cursor: pointer; font-size: 0.9rem;}
+.link-button { background: none; border: none; color: #2196f3; cursor: pointer; text-decoration: none; padding: 0; font-size: 0.9rem; font-weight: 500; border-bottom: 1px solid transparent; }
+.link-button:hover { border-bottom-color: #2196f3; }
+.criteria-grid { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; border-top: 1px solid #f0f0f0; padding-top: 20px; margin-top: 10px; }
+.criteria-rounds { grid-column: 1 / -1; display: flex; items-center: center; gap: 15px; flex-wrap: wrap; margin-bottom: 15px; padding: 15px; background: #f8f8f8; border-radius: 6px; border: 1px solid #eee; }
+.criteria-rounds-label { font-size: 0.95rem; color: #555; font-weight: 600; }
+.round-toggle { display: flex; gap: 8px; }
+.round-toggle-button { padding: 6px 12px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 500; transition: all 0.2s; }
+.round-toggle-button:hover { background: #eee; }
 .round-toggle-button-active { background: #2196f3; color: white; border-color: #2196f3; }
-.round-submitted-note { font-size: 0.8rem; color: #4caf50; font-weight: bold;}
-.round-blocked-note { font-size: 0.8rem; color: #f44336; }
-
-/* Disabled state styling for the inputs and label */
-.criteria-item { display: flex; flex-direction: column; gap: 5px; font-size: 0.9rem; color: #555; position: relative; }
-.criteria-item input, .criteria-item textarea { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; transition: border-color 0.2s; }
-
-/* Change cursor to blocked on hover */
-.criteria-item.disabled { cursor: not-allowed; }
-.criteria-item.disabled input, .criteria-item.disabled textarea { border-color: #ddd; background-color: #f9f9f9; color: #999; }
-
-/* Show message on hover */
-.criteria-item.disabled:hover::after {
-  content: "Blocked: Round Submitted";
-  position: absolute;
-  top: -25px;
-  right: 0;
-  background: rgba(244, 67, 54, 0.9);
-  color: white;
-  padding: 3px 8px;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: bold;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 10;
-}
-
+.round-submitted-note { font-size: 0.85rem; color: #4caf50; font-weight: bold; }
+.round-blocked-note { font-size: 0.85rem; color: #f44336; font-weight: bold; }
+.criteria-item { display: flex; flex-direction: column; gap: 7px; font-size: 0.95rem; color: #555; font-weight: 500; }
+.criteria-item input, .criteria-item textarea { padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: inherit; font-size: 0.95rem; }
+.criteria-item input:disabled, .criteria-item textarea:disabled { background-color: #f5f5f5; color: #999; cursor: not-allowed; border-color: #e0e0e0; }
 .criteria-review { grid-column: 1 / -1; }
-.criteria-actions { grid-column: 1 / -1; text-align: right; margin-top: 10px;}
-.criteria-actions button { padding: 10px 20px; background: #4caf50; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;}
+.criteria-actions { grid-column: 1 / -1; text-align: right; margin-top: 15px; }
+.criteria-actions button { padding: 12px 24px; background: #4caf50; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 1rem; transition: background 0.2s; }
+.criteria-actions button:hover { background: #43a047; }
 .criteria-actions button:disabled { background: #ccc; cursor: not-allowed; }
-.leaderboard-domain { margin-bottom: 25px; }
-.leaderboard { display: flex; flex-direction: column; gap: 8px; }
-.leaderboard-row { display: grid; grid-template-columns: 50px 1fr 80px; gap: 10px; padding: 10px; border: 1px solid #eee; border-radius: 4px; background: white; align-items: center;}
-.leaderboard-row .rank { font-weight: bold; color: #888; text-align: center;}
-.leaderboard-row .team-name { font-weight: bold; }
-.leaderboard-row .score { text-align: right; font-weight: bold; color: #2196f3; font-size: 1.1rem;}
-
-.toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 1000; }
-.toast { background: #333; color: white; padding: 10px 20px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); animation: fadeInOut 5s forwards; }
-
-@keyframes fadeInOut {
-  0% { opacity: 0; transform: translateY(20px); }
-  10% { opacity: 1; transform: translateY(0); }
-  90% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(20px); }
-}
-
-.teams-loading, .empty { text-align: center; color: #888; padding: 20px; }
-.team-skeleton-group { margin-bottom: 15px; }
-.team-skeleton-domain { height: 20px; width: 100px; background: #eee; margin-bottom: 10px; border-radius: 4px;}
-.team-skeleton-card { border: 1px solid #eee; border-radius: 6px; padding: 15px; background: white; margin-bottom: 10px;}
-.team-skeleton-line { height: 15px; background: #eee; border-radius: 4px; margin-bottom: 8px;}
+.leaderboard-domain { margin-bottom: 35px; }
+.leaderboard { display: flex; flex-direction: column; gap: 10px; }
+.leaderboard-row { display: grid; grid-template-columns: 60px 1fr 100px; gap: 15px; padding: 15px 20px; border: 1px solid #eee; border-radius: 6px; background: white; align-items: center; transition: background 0.2s; }
+.leaderboard-row:hover { background: #fafafa; }
+.leaderboard-row .rank { font-weight: bold; color: #999; text-align: center; font-size: 1.1rem; }
+.leaderboard-row .team-name { font-weight: 600; font-size: 1.1rem; }
+.leaderboard-row .team-name-link { color: inherit; text-decoration: none; border-bottom: 1px solid transparent; transition: color 0.2s, border-color 0.2s; }
+.leaderboard-row .team-name-link:hover { color: #2196f3; border-bottom-color: #2196f3; }
+.leaderboard-row .score { text-align: right; font-weight: bold; color: #2196f3; font-size: 1.2rem; }
+.toast-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 10px; z-index: 1000; }
+.toast { background: #333; color: white; padding: 12px 24px; border-radius: 6px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); font-size: 0.95rem; font-weight: 500; max-width: 400px; animation: slideIn 0.3s ease-out, fadeOut 0.5s ease-in 4.5s forwards; }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+.teams-loading, .empty { text-align: center; color: #999; padding: 40px; font-size: 1.1rem; font-weight: 500; }
+.team-skeleton-group { margin-bottom: 20px; }
+.team-skeleton-domain { height: 24px; width: 120px; background: #eee; margin-bottom: 12px; border-radius: 4px; }
+.team-skeleton-card { border: 1px solid #eee; border-radius: 6px; padding: 20px; background: white; margin-bottom: 12px; }
+.team-skeleton-line { height: 18px; background: #eee; border-radius: 4px; margin-bottom: 10px; }
 .team-skeleton-line-title { width: 60%; }
-.team-skeleton-line-action { width: 30%; margin-left: auto;}
+.team-skeleton-line-action { width: 30%; margin-left: auto; }
+@media (max-width: 1024px) {
+  .main-content { padding: 28px; }
+  .panel { padding: 24px; }
+  .header { padding: 16px 22px; }
+  .header h1 { font-size: 1.25rem; }
+  .user-email { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .panel-header { gap: 12px; align-items: flex-start; }
+  .panel-tools { width: 100%; }
+  .panel-tools input { width: 100%; max-width: 100%; }
+  .criteria-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .main-content { padding: 16px; }
+  .panel { padding: 16px; border-radius: 10px; }
+  .header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .actions { width: 100%; flex-wrap: wrap; gap: 10px; }
+  .actions button { padding: 8px 12px; }
+  .panel-header { flex-direction: column; margin-bottom: 16px; }
+  .domain-title { font-size: 1rem; margin-bottom: 10px; }
+  .team-card { grid-template-columns: 1fr auto; padding: 14px; }
+  .team-actions { text-align: right; align-self: start; }
+  .team-info { min-width: 0; }
+  .team-name { font-size: 1.08rem; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .criteria-rounds { gap: 10px; padding: 12px; }
+  .round-toggle { flex-wrap: wrap; }
+  .criteria-actions { text-align: left; }
+  .criteria-actions button { width: 100%; }
+  .leaderboard-row {
+    grid-template-columns: 40px 1fr;
+    grid-template-areas:
+      "rank name"
+      "rank score";
+    gap: 6px 12px;
+    padding: 12px;
+  }
+  .leaderboard-row .rank { grid-area: rank; font-size: 0.95rem; }
+  .leaderboard-row .team-name { grid-area: name; font-size: 1rem; }
+  .leaderboard-row .score { grid-area: score; text-align: left; font-size: 1rem; }
+  .toast-container { right: 12px; left: 12px; bottom: 12px; }
+  .toast { max-width: 100%; }
+}
+@media (max-width: 480px) {
+  .page-auth { padding: 14px; }
+  .auth-card { width: 100%; }
+  .auth-title { letter-spacing: 0; }
+  .back-home { width: 100%; text-align: center; }
+  .panel-tools input { font-size: 0.95rem; }
+  .team-card { grid-template-columns: 1fr auto; }
+  .team-name { font-size: 1rem; }
+}
+@media (max-width: 760px) {
+  .auth-card {
+    padding: 30px 20px;
+    border-radius: 24px;
+  }
+  .back-home {
+    padding: 12px 28px;
+  }
+}
 `;
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:4000/api";
 
-// === MOCK DATA DISABLED: Set to false ===
+// === ACTIVATE LIVE DATABASE: SET TO FALSE ===
 const ENABLE_LOADING_PREVIEW = false; 
 
-// const MOCK_TEAM_DELAY_MS = 2200; // No longer used
+// === ENSURE CONSTANTS ARE RE-ADDED ===
 const ROUNDS = [1, 2];
-
 const CRITERIA = [
   { key: "problem_understanding", label: "Problem Understanding" },
   { key: "innovation_creativity", label: "Innovation / Creativity" },
@@ -117,9 +232,11 @@ const CRITERIA = [
   { key: "testing_robustness", label: "Testing & Robustness" }
 ];
 
-// Removed sleep function and Mock Data constants
-
-const getRouteFromPath = (path) => (path === "/leaderboard" ? "/leaderboard" : "/");
+const getRouteFromPath = (path) => {
+    if (path === "/leaderboard") return "/leaderboard";
+    if (path.startsWith("/team/")) return path;
+    return "/"; // Default to Teams console
+};
 const createEmptyRoundMap = () =>
   ROUNDS.reduce((acc, roundNumber) => {
     acc[roundNumber] = {};
@@ -136,28 +253,6 @@ const normalizeScoreInput = (value) => {
   }
 
   return String(Math.min(10, Math.max(0, numericValue)));
-};
-
-const fetchJson = async (url, options = {}) => {
-  const token = await getAccessToken();
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
-  };
-
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(data.error || "Request failed");
-  }
-  return data;
 };
 
 const App = () => {
@@ -198,7 +293,6 @@ const App = () => {
     setIsTeamsLoading(true);
 
     try {
-      // Fetching from Backend API
       const data = await fetchJson(`${API_BASE}/teams?search=${encodeURIComponent(query)}`);
       if (latestTeamsRequestRef.current === requestId) {
         setTeams(data.teams || []);
@@ -211,13 +305,11 @@ const App = () => {
   };
 
   const loadLeaderboard = async () => {
-    // Fetching from Backend API
     const data = await fetchJson(`${API_BASE}/leaderboard`);
     setLeaderboardByDomain(data.leaderboardByDomain || {});
   };
 
   const loadSubmittedTeams = async () => {
-    // Fetching submission status for each round from Backend API
     const roundEntries = await Promise.all(
       ROUNDS.map(async (roundNumber) => {
         const data = await fetchJson(`${API_BASE}/scores/teams?roundNumber=${roundNumber}`);
@@ -295,9 +387,8 @@ const App = () => {
     }
 
     try {
-      // Submitting to Backend API
       await fetchJson(`${API_BASE}/scores`, {
-        method: "POST",
+        method: "POST", // Now it is correctly set to the string "POST"
         body: JSON.stringify({ teamId, roundNumber, scores: payloadScores, review })
       });
 
@@ -379,7 +470,6 @@ const App = () => {
       setAuthMessage("");
       setIsAuthed(true);
       setUserEmail(email);
-      // Real data loads
       await loadTeams();
       await loadLeaderboard();
       await loadSubmittedTeams();
@@ -394,8 +484,6 @@ const App = () => {
     let isMounted = true;
 
     const initAuth = async () => {
-      // Mock Auth logic removed
-
       setIsAuthLoading(true);
       try {
         const session = await getSession();
@@ -420,8 +508,6 @@ const App = () => {
     };
 
     window.addEventListener("popstate", handlePopState);
-
-    // Mock Auth Cleanup logic removed
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       handleSession(session).catch(() => {});
@@ -463,36 +549,59 @@ const App = () => {
     loadLeaderboard().catch(() => {});
   }, [route, isAuthed, leaderboardByDomain]);
 
+  useEffect(() => {
+    const loadExistingScores = async () => {
+      if (!expandedTeamId || ENABLE_LOADING_PREVIEW) return;
+
+      try {
+        const data = await fetchJson(`${API_BASE}/scores/${expandedTeamId}`);
+        if (data) {
+          setScores((prev) => ({
+            ...prev,
+            [expandedTeamId]: data
+          }));
+        }
+      } catch (error) {
+        console.error("Could not fetch existing scores:", error);
+      }
+    };
+
+    loadExistingScores();
+  }, [expandedTeamId]); // Runs whenever you open/switch teams
+
   const getSelectedRound = (teamId) => selectedRounds[teamId] || 1;
   const canSubmitRound = (teamId, roundNumber) =>
     roundNumber === 1 || Boolean(submittedTeams[roundNumber - 1]?.[teamId]);
 
   if (!isAuthed) {
     return (
-      <div className="page page-auth" style={{display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', flexDirection: 'column'}}>
+      <div className="page page-auth">
         <style>{styles}</style>
-        <div className="panel" style={{textAlign: 'center', maxWidth: '400px'}}>
-          <h1 style={{marginBottom: '15px'}}>Krithoathon - Jury Console</h1>
-          <p style={{color: '#666', marginBottom: '25px'}}>Sign in with Google to continue.</p>
+        <div className="auth-card">
+          <h1 className="auth-title">Krithoathon - Jury Console</h1>
+          <p className="auth-subtitle">Sign in with Google to continue.</p>
           <button
             type="button"
-            className="criteria-actions button"
-            style={{background: '#4caf50', color: 'white', border: 'none', padding: '10px 20px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold'}}
+            className="google-login-button"
             onClick={handleLogin}
+            aria-label="Continue with Google"
           >
-            Continue with Google
+            <img src={googleButtonImage} alt="Continue with Google" />
           </button>
-          {authMessage && <div className="toast" style={{position: 'static', marginTop: '15px', background: '#f44336'}}>{authMessage}</div>}
+          {authMessage && <div className="auth-error">{authMessage}</div>}
         </div>
         <a
           className="back-home"
           href="https://krithoathon-4-0.netlify.app/"
-          style={{marginTop: '20px', color: '#2196f3', textDecoration: 'none'}}
         >
           &larr; Back to Home
         </a>
       </div>
     );
+  }
+
+  if (route.startsWith("/team/")) {
+      return <TeamDetail />;
   }
 
   return (
@@ -520,80 +629,80 @@ const App = () => {
         </div>
       )}
 
-      {route === "/" && (
-        <section className="panel">
-          <div className="panel-header">
-            <h2>Teams</h2>
-            <div className="panel-tools">
-              <input
-                type="search"
-                placeholder="Search teams"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-              />
+      <main className="main-content">
+        {route === "/" && (
+          <section className="panel">
+            <div className="panel-header">
+              <h2>Teams Console</h2>
+              <div className="panel-tools">
+                <input
+                  type="search"
+                  placeholder="Search teams"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
             </div>
-          </div>
-          <div className="team-list">
-            {isTeamsLoading && (
-              <div className="teams-loading" aria-live="polite" aria-busy="true">
-                <div className="team-skeleton-groups" aria-hidden="true">
-                  {["HEALTH", "AGRICULTURE", "AI"].map((domain) => (
-                    <div key={domain} className="team-skeleton-group">
-                      <div className="team-skeleton-domain">{domain}</div>
-                      {[0, 1].map((item) => (
+            <div className="team-list">
+              {isTeamsLoading && (
+                <div className="teams-loading" aria-live="polite" aria-busy="true">
+                  <div className="team-skeleton-groups" aria-hidden="true">
+                    {["HEALTH", "AGRICULTURE", "AI"].map((domain) => (
+                      <div key={domain} className="team-skeleton-group">
+                        <div className="team-skeleton-domain">{domain}</div>
+                        {[0, 1].map((item) => (
                         <div key={`${domain}-${item}`} className="team-skeleton-card">
                           <div className="team-skeleton-line team-skeleton-line-title" />
                           <div className="team-skeleton-line team-skeleton-line-action" />
                         </div>
-                      ))}
-                    </div>
-                  ))}
+                        ))}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            {!isTeamsLoading && teams.length === 0 && <div className="empty">No teams found.</div>}
-            {!isTeamsLoading &&
-              (() => {
-                const grouped = teams.reduce((acc, team) => {
-                  const domain = team.domain;
-                  if (!domain) {
+              )}
+              {!isTeamsLoading && teams.length === 0 && <div className="empty">No teams found.</div>}
+              {!isTeamsLoading &&
+                (() => {
+                  const grouped = teams.reduce((acc, team) => {
+                    const domain = team.domain;
+                    if (!domain) {
+                      return acc;
+                    }
+                    if (!acc[domain]) {
+                      acc[domain] = [];
+                    }
+                    acc[domain].push(team);
                     return acc;
-                  }
-                  if (!acc[domain]) {
-                    acc[domain] = [];
-                  }
-                  acc[domain].push(team);
-                  return acc;
-                }, {});
-                const domainOrder = ["Health", "Agriculture", "AI"];
-                const orderedDomains = [
-                  ...domainOrder,
-                  ...Object.keys(grouped).filter((key) => !domainOrder.includes(key))
-                ];
+                  }, {});
+                  const domainOrder = ["Health", "Agriculture", "AI"];
+                  const orderedDomains = [
+                    ...domainOrder,
+                    ...Object.keys(grouped).filter((key) => !domainOrder.includes(key))
+                  ];
 
-                return orderedDomains
-                  .filter((domain) => grouped[domain]?.length)
-                  .map((domain) => (
-                    <div key={domain} className="domain-section">
-                      <div className="domain-title">{domain}</div>
-                      {grouped[domain].map((team) => {
-                        const currentRound = getSelectedRound(team.id);
-                        // Identify if the currently selected round is already submitted
-                        const isRoundSubmitted = Boolean(submittedTeams[currentRound]?.[team.id]);
-
-                        return (
-                          <div key={team.id} className="team-card">
-                            <div className="team-info">
-                              <h3 className="team-name">
-                                <span>{team.name}</span>
-                                <span className="team-round-status">
-                                  {ROUNDS.map((roundNumber) => (
-                                    <span
-                                      key={roundNumber}
-                                      className={`team-round-pill ${
-                                        submittedTeams[roundNumber]?.[team.id]
-                                          ? "team-round-pill-submitted"
-                                          : ""
+                  return orderedDomains
+                    .filter((domain) => grouped[domain]?.length)
+                    .map((domain) => (
+                      <div key={domain} className="domain-section">
+                        <div className="domain-title">{domain}</div>
+                        {grouped[domain].map((team) => {
+                          const currentRound = getSelectedRound(team.id);
+                          const isRoundSubmitted = Boolean(submittedTeams[currentRound]?.[team.id]);
+                          
+                          return (
+                            <div key={team.id} className="team-card">
+                              <div className="team-info">
+                                <h3 className="team-name">
+                                  <span>{team.name}</span>
+                                  <span className="team-round-status">
+                                    {ROUNDS.map((roundNumber) => (
+                                      <span
+                                        key={roundNumber}
+                                        className={`team-round-pill ${
+                                          submittedTeams[roundNumber]?.[team.id]
+                                            ? "team-round-pill-submitted"
+                                            : ""
                                       }`}
                                     >
                                       R{roundNumber}
@@ -642,9 +751,9 @@ const App = () => {
                                   </div>
                                   {isRoundSubmitted && (
                                     <span className="round-submitted-note">
-                                      Round {currentRound} submitted (View Only)
+                                       Already Submitted 
                                     </span>
-                                  )}
+                                 )}
                                   {!isRoundSubmitted && !canSubmitRound(team.id, currentRound) && (
                                     <span className="round-blocked-note">
                                       Submit Round {currentRound - 1} first
@@ -652,7 +761,6 @@ const App = () => {
                                   )}
                                 </div>
                                 {CRITERIA.map((item) => (
-                                  // Add 'disabled' class to label if submitted
                                   <label key={item.key} className={`criteria-item ${isRoundSubmitted ? "disabled" : ""}`}>
                                     {item.label}
                                     <input
@@ -660,8 +768,9 @@ const App = () => {
                                       min="0"
                                       max="10"
                                       step="1"
+                                      // FIX: Structure mismatch. Looking inside 'scores' nested object.
                                       value={
-                                        scores[team.id]?.[currentRound]?.[item.key] ?? ""
+                                        scores[team.id]?.[currentRound]?.scores?.[item.key] ?? ""
                                       }
                                       onChange={(event) =>
                                         handleScoreChange(
@@ -672,10 +781,9 @@ const App = () => {
                                         )
                                       }
                                       placeholder="0-10"
-                                      // Dynamically disable the input
-                                      disabled={isRoundSubmitted}
+                                      disabled={isRoundSubmitted} 
                                     />
-                                  </label>
+                                 </label>
                                 ))}
                                 <label className={`criteria-item criteria-review ${isRoundSubmitted ? "disabled" : ""}`}>
                                   Jury review
@@ -690,8 +798,7 @@ const App = () => {
                                         event.target.value
                                       )
                                     }
-                                    placeholder="Add feedback on the team's presentation, execution, strengths, and areas to improve"
-                                    // Dynamically disable the textarea
+                                    placeholder="Add feedback on presentation, execution, and strengths."
                                     disabled={isRoundSubmitted}
                                   />
                                 </label>
@@ -714,47 +821,52 @@ const App = () => {
                     </div>
                   ));
               })()}
-          </div>
-        </section>
-      )}
+            </div>
+          </section>
+        )}
 
-      {route === "/leaderboard" && (
-        <section className="panel">
-          <h2>Leaderboard</h2>
-          {(() => {
-            const domainOrder = ["Health", "Agriculture", "AI"];
-            const domains = [
-              ...domainOrder,
-              ...Object.keys(leaderboardByDomain).filter(
-                (key) => !domainOrder.includes(key)
-              )
-            ];
-            const hasRows = domains.some((domain) => leaderboardByDomain[domain]?.length);
+        {route === "/leaderboard" && (
+          <section className="panel">
+            <h2>Leaderboard</h2>
+            {(() => {
+              const domainOrder = ["Health", "Agriculture", "AI"];
+              const domains = [
+                ...domainOrder,
+                ...Object.keys(leaderboardByDomain).filter(
+                  (key) => !domainOrder.includes(key)
+                )
+              ];
+              const hasRows = domains.some((domain) => leaderboardByDomain[domain]?.length);
 
-            if (!hasRows) {
-              return <div className="empty">No scores yet.</div>;
-            }
+              if (!hasRows) {
+                return <div className="empty">No scores yet.</div>;
+              }
 
-            return domains
-              .filter((domain) => leaderboardByDomain[domain]?.length)
-              .map((domain) => (
-                <div key={domain} className="leaderboard-domain">
-                  <div className="domain-title">{domain}</div>
-                  <div className="leaderboard">
-                    {leaderboardByDomain[domain].map((row, index) => (
-                      <div key={row.team_id} className="leaderboard-row">
-                        <span className="rank">#{index + 1}</span>
-                        <span className="team-name">{row.team_name}</span>
-                        <span className="score">{row.total_score ?? 0}</span>
-                      </div>
-                    ))}
+              return domains
+                .filter((domain) => leaderboardByDomain[domain]?.length)
+                .map((domain) => (
+                  <div key={domain} className="leaderboard-domain">
+                    <div className="domain-title">{domain}</div>
+                    <div className="leaderboard">
+                      {leaderboardByDomain[domain].map((row, index) => (
+                        <div key={row.team_id} className="leaderboard-row">
+                          <span className="rank">#{index + 1}</span>
+                          <span className="team-name">
+                              {/* FIX: Link to Team Details */}
+                              <a href={`/team/${row.team_id}`} className="team-name-link" onClick={(e) => { e.preventDefault(); navigateTo(`/team/${row.team_id}`); }}>
+                                {row.team_name}
+                              </a>
+                          </span>
+                          <span className="score">{row.total_score ?? 0}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ));
-          })()}
-        </section>
-      )}
-
+                ));
+            })()}
+          </section>
+        )}
+      </main>
     </div>
   );
 };
